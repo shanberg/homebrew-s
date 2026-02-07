@@ -1,0 +1,22 @@
+name: Audit
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+
+jobs:
+  audit:
+    runs-on: macos-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Setup Homebrew
+        uses: Homebrew/actions/setup-homebrew@master
+
+      - name: Audit formulae
+        run: brew audit --strict --formula Formula/*.rb
+
+      - name: Style check
+        run: brew style Formula/
