@@ -3,8 +3,8 @@
 
 class MaxwellCarmody < Formula
   desc "Multi-application architecture for self-hosted services (mc/deploy, gateway, db, validate CLIs)"
-  homepage "https://github.com/shanberg/maxwell-carmody"
-  head "https://github.com/shanberg/maxwell-carmody.git", using: :git
+  homepage "https://github.com/shanberg/home-services"
+  head "https://github.com/shanberg/home-services.git", using: :git
 
   depends_on "node" => :build
   depends_on "pnpm" => :build
