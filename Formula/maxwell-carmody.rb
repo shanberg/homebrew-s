@@ -43,13 +43,16 @@ class MaxwellCarmody < Formula
     # Limit parallelism so install doesn't OOM or overload low-memory servers (can cause reboot/restart).
     ENV["TURBO_CONCURRENCY"] = "1"
     # Exclude .git to avoid permission denied when overwriting existing libexec/.git from a previous install.
+    ohai "Copying source (rsync)..."
     system "rsync", "-a", "--exclude", ".git", "#{buildpath}/", "#{libexec}/"
+    ohai "Running pnpm install (may take 5–15 min, log: #{log_path})..."
     # --ignore-scripts: skip all dependency lifecycle scripts (no postinstall can prompt).
     # --reporter append-only: stream progress line-by-line so we can see install isn't hanging.
     run_no_stdin "pnpm", "install", "--frozen-lockfile", "--config.confirmModulesPurge=false", "--ignore-scripts", "--reporter", "append-only"
+    ohai "Running turbo build for @mc/deployment (one task at a time)..."
     # Build deployment CLI and its workspace deps so mc/deploy resolve @mc/* dist/
-    # --summarize: show which tasks ran (see install log path above).
     run_no_stdin "pnpm", "exec", "turbo", "run", "build", "--filter=@mc/deployment...", "--no-update-notifier", "--summarize", "--concurrency=1"
+    ohai "Installing bin wrappers (mc, deploy, gateway, db, validate)..."
     tsx = libexec/"node_modules/.bin/tsx"
     deploy_js = libexec/"packages/deployment/bin/deploy.js"
     (bin/"mc").write <<~EOS
