@@ -40,6 +40,8 @@ class MaxwellCarmody < Formula
     ENV["DEBIAN_FRONTEND"] = "noninteractive" if OS.linux?
     ENV["npm_config_yes"] = "true"
     ENV["TURBO_CI"] = "1"
+    # Limit parallelism so install doesn't OOM or overload low-memory servers (can cause reboot/restart).
+    ENV["TURBO_CONCURRENCY"] = "1"
     # Exclude .git to avoid permission denied when overwriting existing libexec/.git from a previous install.
     system "rsync", "-a", "--exclude", ".git", "#{buildpath}/", "#{libexec}/"
     # --ignore-scripts: skip all dependency lifecycle scripts (no postinstall can prompt).
@@ -47,7 +49,7 @@ class MaxwellCarmody < Formula
     run_no_stdin "pnpm", "install", "--frozen-lockfile", "--config.confirmModulesPurge=false", "--ignore-scripts", "--reporter", "append-only"
     # Build deployment CLI and its workspace deps so mc/deploy resolve @mc/* dist/
     # --summarize: show which tasks ran (see install log path above).
-    run_no_stdin "pnpm", "exec", "turbo", "run", "build", "--filter=@mc/deployment...", "--no-update-notifier", "--summarize"
+    run_no_stdin "pnpm", "exec", "turbo", "run", "build", "--filter=@mc/deployment...", "--no-update-notifier", "--summarize", "--concurrency=1"
     tsx = libexec/"node_modules/.bin/tsx"
     deploy_js = libexec/"packages/deployment/bin/deploy.js"
     (bin/"mc").write <<~EOS
