@@ -12,13 +12,17 @@ class MaxwellCarmody < Formula
   def install
     system "cp", "-R", "#{buildpath}/.", libexec
     system "pnpm", "install", :dir => libexec
+    # Build deployment CLI and its workspace deps so mc/deploy resolve @mc/* dist/
+    system "pnpm", "exec", "turbo", "run", "build", "--filter=@mc/deployment...", :dir => libexec
+    tsx = libexec/"node_modules/.bin/tsx"
+    deploy_js = libexec/"packages/deployment/bin/deploy.js"
     (bin/"mc").write <<~EOS
       #!/bin/sh
-      exec pnpm -C "#{libexec}" exec mc "$@"
+      exec "#{tsx}" "#{deploy_js}" "$@"
     EOS
     (bin/"deploy").write <<~EOS
       #!/bin/sh
-      exec pnpm -C "#{libexec}" exec deploy "$@"
+      exec "#{tsx}" "#{deploy_js}" "$@"
     EOS
     (bin/"gateway").write <<~EOS
       #!/bin/sh
@@ -61,8 +65,10 @@ class MaxwellCarmody < Formula
   end
 
   test do
-    assert_match(/Usage: mc <command>/, shell_output("#{bin}/mc --help 2>&1"))
-    assert_match(/Usage: mc <command>/, shell_output("#{bin}/deploy --help 2>&1"))
+    mc_out = shell_output("#{bin}/mc --help 2>&1")
+    assert_match(/Usage:.*(mc|deploy).*command/, mc_out, "mc --help should print usage")
+    deploy_out = shell_output("#{bin}/deploy --help 2>&1")
+    assert_match(/Usage:.*(mc|deploy).*command/, deploy_out, "deploy --help should print usage")
     assert_match(/Usage: gateway/, shell_output("#{bin}/gateway 2>&1"))
     assert_match(/Usage: db/, shell_output("#{bin}/db 2>&1"))
     assert_match(/validate/, shell_output("#{bin}/validate --help 2>&1"))
