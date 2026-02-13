@@ -1,6 +1,8 @@
 # typed: false
 # frozen_string_literal: true
 
+require "shellwords"
+
 class MaxwellCarmody < Formula
   desc "Multi-application architecture for self-hosted services (mc/deploy, gateway, db, validate CLIs)"
   homepage "https://github.com/shanberg/home-services"
@@ -10,15 +12,23 @@ class MaxwellCarmody < Formula
   depends_on "node" => :build
   depends_on "pnpm" => :build
 
+  # Run in libexec with stdin closed so no subprocess can block waiting for input (e.g. over SSH).
+  def run_no_stdin(*cmd)
+    cmd_str = cmd.map { |c| Shellwords.escape(c) }.join(" ")
+    system "bash", "-c", "exec 0</dev/null; #{cmd_str}", :dir => libexec
+  end
+
   def install
-    # Non-interactive: avoid prompts that hang when no TTY (see possible hang causes below).
+    # Non-interactive: env + no stdin so pnpm/turbo/deps never prompt or hang.
     ENV["CI"] = "1"
     ENV["DEBIAN_FRONTEND"] = "noninteractive" if OS.linux?
+    ENV["npm_config_yes"] = "true"
+    ENV["TURBO_CI"] = "1"
     system "cp", "-R", "#{buildpath}/.", libexec
-    system "pnpm", "install", "--frozen-lockfile", "--config.confirmModulesPurge=false", :dir => libexec
+    # --ignore-scripts: skip all dependency lifecycle scripts (no postinstall can prompt).
+    run_no_stdin "pnpm", "install", "--frozen-lockfile", "--config.confirmModulesPurge=false", "--ignore-scripts"
     # Build deployment CLI and its workspace deps so mc/deploy resolve @mc/* dist/
-    # --no-daemon: avoid turbo waiting on/for daemon (can hang in non-interactive context).
-    system "pnpm", "exec", "turbo", "run", "build", "--filter=@mc/deployment...", "--no-daemon", :dir => libexec
+    run_no_stdin "pnpm", "exec", "turbo", "run", "build", "--filter=@mc/deployment...", "--no-update-notifier"
     tsx = libexec/"node_modules/.bin/tsx"
     deploy_js = libexec/"packages/deployment/bin/deploy.js"
     (bin/"mc").write <<~EOS
