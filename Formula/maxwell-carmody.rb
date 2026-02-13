@@ -18,14 +18,11 @@ class MaxwellCarmody < Formula
   end
 
   # Run in libexec with stdin closed so no subprocess can block waiting for input (e.g. over SSH).
-  # Install output is always teed to install_log_path; tail -f that path to watch progress.
-  # script -q ... bash -c gives the pipeline a pty so pnpm/turbo line-buffer (macOS script has no -c; run bash -c instead).
+  # Install output is always teed to install_log_path; full log available after install (tail -f may lag due to pipe buffering).
   def run_no_stdin(*cmd)
     cmd_str = cmd.map { |c| Shellwords.escape(c) }.join(" ")
     log = install_log_path
-    inner = "( #{cmd_str} ) 2>&1 | tee #{Shellwords.escape(log)}; exit \\${PIPESTATUS[0]}"
-    inner_safe = inner.gsub("'") { "'\\\\''" }
-    system "bash", "-c", "exec 0</dev/null; script -q /dev/null bash -c '#{inner_safe}'", :dir => libexec
+    system "bash", "-c", "exec 0</dev/null; ( #{cmd_str} ) 2>&1 | tee #{Shellwords.escape(log)}; exit \\${PIPESTATUS[0]}", :dir => libexec
   end
 
   def install
