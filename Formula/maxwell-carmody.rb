@@ -13,13 +13,19 @@ class MaxwellCarmody < Formula
   depends_on "pnpm" => :build
 
   # Run in libexec with stdin closed so no subprocess can block waiting for input (e.g. over SSH).
+  # If HOMEBREW_MC_INSTALL_LOG is set, stdout/stderr are teed to that path so you can tail -f from another terminal.
   def run_no_stdin(*cmd)
     cmd_str = cmd.map { |c| Shellwords.escape(c) }.join(" ")
+    log = ENV["HOMEBREW_MC_INSTALL_LOG"]
+    if log.to_s != ""
+      cmd_str = "( #{cmd_str} ) 2>&1 | tee #{Shellwords.escape(log)}; exit ${PIPESTATUS[0]}"
+    end
     system "bash", "-c", "exec 0</dev/null; #{cmd_str}", :dir => libexec
   end
 
   def install
     # Non-interactive: env + no stdin so pnpm/turbo/deps never prompt or hang.
+    # Optional: HOMEBREW_MC_INSTALL_LOG=/tmp/maxwell-carmody-install.log to tee output; then tail -f that path in another terminal.
     ENV["CI"] = "1"
     ENV["DEBIAN_FRONTEND"] = "noninteractive" if OS.linux?
     ENV["npm_config_yes"] = "true"
@@ -27,9 +33,11 @@ class MaxwellCarmody < Formula
     # Exclude .git to avoid permission denied when overwriting existing libexec/.git from a previous install.
     system "rsync", "-a", "--exclude", ".git", "#{buildpath}/", "#{libexec}/"
     # --ignore-scripts: skip all dependency lifecycle scripts (no postinstall can prompt).
-    run_no_stdin "pnpm", "install", "--frozen-lockfile", "--config.confirmModulesPurge=false", "--ignore-scripts"
+    # --reporter append-only: stream progress line-by-line so we can see install isn't hanging.
+    run_no_stdin "pnpm", "install", "--frozen-lockfile", "--config.confirmModulesPurge=false", "--ignore-scripts", "--reporter", "append-only"
     # Build deployment CLI and its workspace deps so mc/deploy resolve @mc/* dist/
-    run_no_stdin "pnpm", "exec", "turbo", "run", "build", "--filter=@mc/deployment...", "--no-update-notifier"
+    # --summarize: show which tasks ran; output visible when HOMEBREW_MC_INSTALL_LOG set or brew --verbose.
+    run_no_stdin "pnpm", "exec", "turbo", "run", "build", "--filter=@mc/deployment...", "--no-update-notifier", "--summarize"
     tsx = libexec/"node_modules/.bin/tsx"
     deploy_js = libexec/"packages/deployment/bin/deploy.js"
     (bin/"mc").write <<~EOS
