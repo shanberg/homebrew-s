@@ -24,7 +24,8 @@ class MaxwellCarmody < Formula
     ENV["DEBIAN_FRONTEND"] = "noninteractive" if OS.linux?
     ENV["npm_config_yes"] = "true"
     ENV["TURBO_CI"] = "1"
-    system "cp", "-R", "#{buildpath}/.", libexec
+    # Exclude .git to avoid permission denied when overwriting existing libexec/.git from a previous install.
+    system "rsync", "-a", "--exclude", ".git", "#{buildpath}/", "#{libexec}/"
     # --ignore-scripts: skip all dependency lifecycle scripts (no postinstall can prompt).
     run_no_stdin "pnpm", "install", "--frozen-lockfile", "--config.confirmModulesPurge=false", "--ignore-scripts"
     # Build deployment CLI and its workspace deps so mc/deploy resolve @mc/* dist/
