@@ -12,7 +12,7 @@ class MaxwellCarmody < Formula
 
   def install
     system "cp", "-R", "#{buildpath}/.", libexec
-    system "pnpm", "install", :dir => libexec
+    system "pnpm", "install", "--frozen-lockfile", :dir => libexec
     # Build deployment CLI and its workspace deps so mc/deploy resolve @mc/* dist/
     system "pnpm", "exec", "turbo", "run", "build", "--filter=@mc/deployment...", :dir => libexec
     tsx = libexec/"node_modules/.bin/tsx"
