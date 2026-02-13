@@ -12,20 +12,31 @@ class MaxwellCarmody < Formula
   depends_on "node" => :build
   depends_on "pnpm" => :build
 
+  # Default path for install log; override with HOMEBREW_MC_INSTALL_LOG. Rotated to .prev each install.
+  def install_log_path
+    ENV["HOMEBREW_MC_INSTALL_LOG"].to_s != "" ? ENV["HOMEBREW_MC_INSTALL_LOG"] : "/tmp/maxwell-carmody-install.log"
+  end
+
   # Run in libexec with stdin closed so no subprocess can block waiting for input (e.g. over SSH).
-  # If HOMEBREW_MC_INSTALL_LOG is set, stdout/stderr are teed to that path so you can tail -f from another terminal.
+  # Install output is always teed to install_log_path (default /tmp/maxwell-carmody-install.log); tail -f that path to watch progress.
   def run_no_stdin(*cmd)
     cmd_str = cmd.map { |c| Shellwords.escape(c) }.join(" ")
-    log = ENV["HOMEBREW_MC_INSTALL_LOG"]
-    if log.to_s != ""
-      cmd_str = "( #{cmd_str} ) 2>&1 | tee #{Shellwords.escape(log)}; exit ${PIPESTATUS[0]}"
-    end
+    log = install_log_path
+    cmd_str = "( #{cmd_str} ) 2>&1 | tee #{Shellwords.escape(log)}; exit ${PIPESTATUS[0]}"
     system "bash", "-c", "exec 0</dev/null; #{cmd_str}", :dir => libexec
   end
 
   def install
     # Non-interactive: env + no stdin so pnpm/turbo/deps never prompt or hang.
-    # Optional: HOMEBREW_MC_INSTALL_LOG=/tmp/maxwell-carmody-install.log to tee output; then tail -f that path in another terminal.
+    # Install log: always teed to install_log_path (default /tmp/maxwell-carmody-install.log). Rotate previous to .prev.
+    log_path = install_log_path
+    if File.exist?(log_path)
+      begin
+        File.rename(log_path, "#{log_path}.prev")
+      rescue StandardError
+        File.delete(log_path) if File.exist?(log_path)
+      end
+    end
     ENV["CI"] = "1"
     ENV["DEBIAN_FRONTEND"] = "noninteractive" if OS.linux?
     ENV["npm_config_yes"] = "true"
@@ -36,7 +47,7 @@ class MaxwellCarmody < Formula
     # --reporter append-only: stream progress line-by-line so we can see install isn't hanging.
     run_no_stdin "pnpm", "install", "--frozen-lockfile", "--config.confirmModulesPurge=false", "--ignore-scripts", "--reporter", "append-only"
     # Build deployment CLI and its workspace deps so mc/deploy resolve @mc/* dist/
-    # --summarize: show which tasks ran; output visible when HOMEBREW_MC_INSTALL_LOG set or brew --verbose.
+    # --summarize: show which tasks ran (see install log path above).
     run_no_stdin "pnpm", "exec", "turbo", "run", "build", "--filter=@mc/deployment...", "--no-update-notifier", "--summarize"
     tsx = libexec/"node_modules/.bin/tsx"
     deploy_js = libexec/"packages/deployment/bin/deploy.js"
