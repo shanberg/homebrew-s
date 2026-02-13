@@ -4,9 +4,7 @@
 class MaxwellCarmody < Formula
   desc "Multi-application architecture for self-hosted services (mc/deploy, gateway, db, validate CLIs)"
   homepage "https://github.com/shanberg/home-services"
-  url "https://github.com/shanberg/home-services/archive/64d8c99923e8b3f1851327e0a9d7686737119bdf.tar.gz"
-  sha256 "0019dfc4b32d63c1392aa264aed2253c1e0c2fb09216f8e2cc269bbfb8bb49b5"
-  version "1.0.0"
+  # Private repo: no stable tarball; install from head (git clone via SSH).
   head "git@github.com:shanberg/home-services.git", branch: "yet-again-another-deployment-flow", using: :git
 
   depends_on "node" => :build
