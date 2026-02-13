@@ -11,13 +11,14 @@ class MaxwellCarmody < Formula
   depends_on "pnpm" => :build
 
   def install
-    # Non-interactive: avoid pnpm/turbo prompts that would hang when no TTY (e.g. SSH timeout).
+    # Non-interactive: avoid prompts that hang when no TTY (see possible hang causes below).
     ENV["CI"] = "1"
     ENV["DEBIAN_FRONTEND"] = "noninteractive" if OS.linux?
     system "cp", "-R", "#{buildpath}/.", libexec
     system "pnpm", "install", "--frozen-lockfile", "--config.confirmModulesPurge=false", :dir => libexec
     # Build deployment CLI and its workspace deps so mc/deploy resolve @mc/* dist/
-    system "pnpm", "exec", "turbo", "run", "build", "--filter=@mc/deployment...", :dir => libexec
+    # --no-daemon: avoid turbo waiting on/for daemon (can hang in non-interactive context).
+    system "pnpm", "exec", "turbo", "run", "build", "--filter=@mc/deployment...", "--no-daemon", :dir => libexec
     tsx = libexec/"node_modules/.bin/tsx"
     deploy_js = libexec/"packages/deployment/bin/deploy.js"
     (bin/"mc").write <<~EOS
