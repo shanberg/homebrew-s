@@ -8,6 +8,7 @@ class MaxwellCarmody < Formula
   homepage "https://github.com/shanberg/home-services"
   # Private repo: no stable tarball; install from head (git clone via SSH).
   head "git@github.com:shanberg/home-services.git", branch: "yet-again-another-deployment-flow", using: :git
+  revision 1
 
   depends_on "node" => :build
   depends_on "pnpm" => :build
@@ -45,10 +46,10 @@ class MaxwellCarmody < Formula
     # Exclude .git to avoid permission denied when overwriting existing libexec/.git from a previous install.
     ohai "Copying source (rsync)..."
     system "rsync", "-a", "--exclude", ".git", "#{buildpath}/", "#{libexec}/"
-    ohai "Running pnpm install (may take 5–15 min, log: #{log_path})..."
+    ohai "Running pnpm install for @mc/deployment only (log: #{log_path})..."
+    # --filter @mc/deployment...: install only the deployment package and its deps, not the entire workspace (apps, Vite, Storybook, etc.). Avoids huge install and system load.
     # --ignore-scripts: skip all dependency lifecycle scripts (no postinstall can prompt).
-    # --reporter append-only: stream progress line-by-line so we can see install isn't hanging.
-    run_no_stdin "pnpm", "install", "--frozen-lockfile", "--config.confirmModulesPurge=false", "--ignore-scripts", "--reporter", "append-only"
+    run_no_stdin "pnpm", "install", "--frozen-lockfile", "--filter", "@mc/deployment...", "--config.confirmModulesPurge=false", "--ignore-scripts", "--reporter", "append-only"
     ohai "Running turbo build for @mc/deployment (one task at a time)..."
     # Build deployment CLI and its workspace deps so mc/deploy resolve @mc/* dist/
     run_no_stdin "pnpm", "exec", "turbo", "run", "build", "--filter=@mc/deployment...", "--no-update-notifier", "--summarize", "--concurrency=1"
