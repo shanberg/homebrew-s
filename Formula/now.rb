@@ -5,10 +5,9 @@ class Now < Formula
   desc "Minimal, opinionated, terminal-based tool for reminding you what to focus on"
   homepage "https://github.com/shanberg/now"
   url "https://github.com/shanberg/now/archive/refs/tags/v1.0.0.tar.gz"
-  sha256 "0000000000000000000000000000000000000000000000000000000000000000"
+  sha256 "d5558cd419c8d46bdc958064cb97f963d1ea793866414c025906ec15033512ed"
   version "1.0.0"
   head "https://github.com/shanberg/now.git", branch: "main"
-  # After releasing: curl -sL https://github.com/shanberg/now/archive/refs/tags/v1.0.0.tar.gz | shasum -a 256
 
   depends_on "deno" => :build
 
