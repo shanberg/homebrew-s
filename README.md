@@ -1,4 +1,4 @@
-# homebrew-shanberg
+# homebrew-s
 
 Personal Homebrew tap for shanberg tools and utilities.
 
