@@ -20,10 +20,29 @@ class MaxwellCarmody < Formula
 
   # Run in libexec with stdin closed so no subprocess can block waiting for input (e.g. over SSH).
   # Install output is always teed to install_log_path; full log available after install (tail -f may lag due to pipe buffering).
-  def run_no_stdin(*cmd)
+  # Pass env_hash to force pnpm/turbo to see PNPM_WORKERS, NODE_OPTIONS, etc. (avoids inheritance/sanitization issues).
+  def run_no_stdin(*cmd, env_hash: nil)
     cmd_str = cmd.map { |c| Shellwords.escape(c) }.join(" ")
     log = install_log_path
-    system "bash", "-c", "exec 0</dev/null; ( #{cmd_str} ) 2>&1 | tee #{Shellwords.escape(log)}; exit \\${PIPESTATUS[0]}", :dir => libexec
+    args = ["bash", "-c", "exec 0</dev/null; ( #{cmd_str} ) 2>&1 | tee #{Shellwords.escape(log)}; exit \\${PIPESTATUS[0]}"]
+    opts = { :dir => libexec }
+    if env_hash
+      system(env_hash, *args, opts)
+    else
+      system(*args, opts)
+    end
+  end
+
+  # Env vars that must reach pnpm and turbo to limit workers and memory. Pass explicitly so the subprocess is guaranteed to see them.
+  def pnpm_env
+    {
+      "CI" => "1",
+      "npm_config_yes" => "true",
+      "TURBO_CI" => "1",
+      "TURBO_CONCURRENCY" => "1",
+      "NODE_OPTIONS" => "--max-old-space-size=4096",
+      "PNPM_WORKERS" => "999",
+    }.merge(ENV.to_h)
   end
 
   def install
@@ -39,30 +58,25 @@ class MaxwellCarmody < Formula
     end
     ENV["CI"] = "1"
     ENV["DEBIAN_FRONTEND"] = "noninteractive" if OS.linux?
-    ENV["npm_config_yes"] = "true"
-    ENV["TURBO_CI"] = "1"
-    # Limit parallelism so install doesn't OOM or overload low-memory servers (can cause reboot/restart).
-    ENV["TURBO_CONCURRENCY"] = "1"
-    # Cap Node heap so pnpm install doesn't exhaust system memory; required for large monorepo installs.
-    ENV["NODE_OPTIONS"] = "--max-old-space-size=4096"
-    # Limit pnpm workers (PNPM_WORKERS = cores to leave unused). 9 on a 10-core machine => 1 worker, avoids hundreds of node processes.
-    ENV["PNPM_WORKERS"] = "9"
+    # pnpm_env (passed explicitly to run_no_stdin for install/build) sets NODE_OPTIONS, PNPM_WORKERS, TURBO_* so subprocess is guaranteed to see them.
     # Exclude .git to avoid permission denied when overwriting existing libexec/.git from a previous install.
     ohai "Copying source (rsync)..."
     system "rsync", "-a", "--exclude", ".git", "#{buildpath}/", "#{libexec}/"
     check_script = libexec/"scripts/deployment/ensure-node-memory-limit.sh"
     if check_script.exist?
       ohai "Checking Node memory limit..."
+      ENV["NODE_OPTIONS"] = "--max-old-space-size=4096"
       run_no_stdin "bash", "scripts/deployment/ensure-node-memory-limit.sh", "--check"
     end
     ohai "Running pnpm install for @mc/deployment only (log: #{log_path})..."
     # --filter @mc/deployment...: install only the deployment package and its deps, not the entire workspace (apps, Vite, Storybook, etc.). Avoids huge install and system load.
     # --child-concurrency 1: avoid unbounded memory from parallel child processes.
     # --ignore-scripts: skip all dependency lifecycle scripts (no postinstall can prompt).
-    run_no_stdin "pnpm", "install", "--frozen-lockfile", "--filter", "@mc/deployment...", "--child-concurrency", "1", "--config.confirmModulesPurge=false", "--ignore-scripts", "--reporter", "append-only"
+    # Pass pnpm_env explicitly so PNPM_WORKERS and NODE_OPTIONS are guaranteed in the subprocess (pnpm worker pool uses PNPM_WORKERS = cores to leave unused; 999 => 1 worker).
+    run_no_stdin "pnpm", "install", "--frozen-lockfile", "--filter", "@mc/deployment...", "--child-concurrency", "1", "--config.confirmModulesPurge=false", "--ignore-scripts", "--reporter", "append-only", env_hash: pnpm_env
     ohai "Running turbo build for @mc/deployment (one task at a time)..."
     # Build deployment CLI and its workspace deps so mc/deploy resolve @mc/* dist/
-    run_no_stdin "pnpm", "exec", "turbo", "run", "build", "--filter=@mc/deployment...", "--no-update-notifier", "--summarize", "--concurrency=1"
+    run_no_stdin "pnpm", "exec", "turbo", "run", "build", "--filter=@mc/deployment...", "--no-update-notifier", "--summarize", "--concurrency=1", env_hash: pnpm_env
     ohai "Installing bin wrappers (mc, deploy, gateway, db, validate)..."
     tsx = libexec/"node_modules/.bin/tsx"
     deploy_js = libexec/"packages/deployment/bin/deploy.js"
