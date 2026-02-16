@@ -27,9 +27,9 @@ class MaxwellCarmody < Formula
     args = ["bash", "-c", "exec 0</dev/null; ( #{cmd_str} ) 2>&1 | tee #{Shellwords.escape(log)}; exit \\${PIPESTATUS[0]}"]
     opts = { :dir => libexec }
     if env_hash
-      system(env_hash, *args, opts)
+      system(env_hash, *args, **opts)
     else
-      system(*args, opts)
+      system(*args, **opts)
     end
   end
 
