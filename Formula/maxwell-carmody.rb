@@ -43,13 +43,23 @@ class MaxwellCarmody < Formula
     ENV["TURBO_CI"] = "1"
     # Limit parallelism so install doesn't OOM or overload low-memory servers (can cause reboot/restart).
     ENV["TURBO_CONCURRENCY"] = "1"
+    # Cap Node heap so pnpm install doesn't exhaust system memory; required for large monorepo installs.
+    ENV["NODE_OPTIONS"] = "--max-old-space-size=4096"
+    # Limit pnpm workers (PNPM_WORKERS = cores to leave unused). 9 on a 10-core machine => 1 worker, avoids hundreds of node processes.
+    ENV["PNPM_WORKERS"] = "9"
     # Exclude .git to avoid permission denied when overwriting existing libexec/.git from a previous install.
     ohai "Copying source (rsync)..."
     system "rsync", "-a", "--exclude", ".git", "#{buildpath}/", "#{libexec}/"
+    check_script = libexec/"scripts/deployment/ensure-node-memory-limit.sh"
+    if check_script.exist?
+      ohai "Checking Node memory limit..."
+      run_no_stdin "bash", "scripts/deployment/ensure-node-memory-limit.sh", "--check"
+    end
     ohai "Running pnpm install for @mc/deployment only (log: #{log_path})..."
     # --filter @mc/deployment...: install only the deployment package and its deps, not the entire workspace (apps, Vite, Storybook, etc.). Avoids huge install and system load.
+    # --child-concurrency 1: avoid unbounded memory from parallel child processes.
     # --ignore-scripts: skip all dependency lifecycle scripts (no postinstall can prompt).
-    run_no_stdin "pnpm", "install", "--frozen-lockfile", "--filter", "@mc/deployment...", "--config.confirmModulesPurge=false", "--ignore-scripts", "--reporter", "append-only"
+    run_no_stdin "pnpm", "install", "--frozen-lockfile", "--filter", "@mc/deployment...", "--child-concurrency", "1", "--config.confirmModulesPurge=false", "--ignore-scripts", "--reporter", "append-only"
     ohai "Running turbo build for @mc/deployment (one task at a time)..."
     # Build deployment CLI and its workspace deps so mc/deploy resolve @mc/* dist/
     run_no_stdin "pnpm", "exec", "turbo", "run", "build", "--filter=@mc/deployment...", "--no-update-notifier", "--summarize", "--concurrency=1"
