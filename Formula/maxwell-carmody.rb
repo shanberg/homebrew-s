@@ -20,20 +20,19 @@ class MaxwellCarmody < Formula
 
   # Run in libexec with stdin closed so no subprocess can block waiting for input (e.g. over SSH).
   # Install output is always teed to install_log_path; full log available after install (tail -f may lag due to pipe buffering).
-  # Pass env_hash to force pnpm/turbo to see PNPM_WORKERS, NODE_OPTIONS, etc. (avoids inheritance/sanitization issues).
+  # When env_hash is given, inject exports into the shell so pnpm/turbo see PNPM_WORKERS, NODE_OPTIONS, etc. (avoids passing a Hash to system() which can break under Homebrew's Ruby).
   def run_no_stdin(*cmd, env_hash: nil)
     cmd_str = cmd.map { |c| Shellwords.escape(c) }.join(" ")
     log = install_log_path
-    args = ["bash", "-c", "exec 0</dev/null; ( #{cmd_str} ) 2>&1 | tee #{Shellwords.escape(log)}; exit \\${PIPESTATUS[0]}"]
-    opts = { :dir => libexec }
-    if env_hash
-      system(env_hash, *args, **opts)
-    else
-      system(*args, **opts)
+    inner = "exec 0</dev/null; ( #{cmd_str} ) 2>&1 | tee #{Shellwords.escape(log)}; exit \\${PIPESTATUS[0]}"
+    if env_hash && !env_hash.empty?
+      exports = env_hash.map { |k, v| "#{k}=#{Shellwords.escape(v.to_s)}" }.join(" ")
+      inner = "export #{exports}; #{inner}"
     end
+    system "bash", "-c", inner, :dir => libexec
   end
 
-  # Env vars that must reach pnpm and turbo to limit workers and memory. Pass explicitly so the subprocess is guaranteed to see them.
+  # Env vars that must reach pnpm and turbo to limit workers and memory. Injected into the shell via export so the subprocess is guaranteed to see them.
   def pnpm_env
     {
       "CI" => "1",
