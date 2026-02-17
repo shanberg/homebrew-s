@@ -22,8 +22,8 @@
 
 class MaxwellCarmody < Formula
   desc "Deploy CLI and agent for Maxwell Carmody"
-  homepage "https://github.com/shanberg/home-services"
-  url "https://github.com/shanberg/home-services/archive/fce266c8029a55a049e7e545d9e1acb57008b516.tar.gz"
+  homepage "https://github.com/shanberg/maxwell-carmody"
+  url "https://github.com/shanberg/maxwell-carmody/archive/refs/tags/v1.0.0.tar.gz"
   sha256 "0019dfc4b32d63c1392aa264aed2253c1e0c2fb09216f8e2cc269bbfb8bb49b5"
   license "MIT"
   version "1.0.0"
@@ -42,41 +42,11 @@ class MaxwellCarmody < Formula
   depends_on "node"
   depends_on "pnpm" => :build
 
-  # Default path for install log; override with HOMEBREW_MC_INSTALL_LOG. Rotated to .prev each install.
-  def install_log_path
-    ENV["HOMEBREW_MC_INSTALL_LOG"].to_s != "" ? ENV["HOMEBREW_MC_INSTALL_LOG"] : "/tmp/maxwell-carmody-install.log"
-  end
-
-  # Run in libexec with stdin closed so no subprocess can block waiting for input (e.g. over SSH).
-  # Install output is always teed to install_log_path; full log available after install (tail -f may lag due to pipe buffering).
-  # When env_hash is given, inject exports into the shell so pnpm/turbo see PNPM_WORKERS, NODE_OPTIONS, etc. (avoids passing a Hash to system() which can break under Homebrew's Ruby).
-  def run_no_stdin(*cmd, env_hash: nil)
-    cmd_str = cmd.map { |c| Shellwords.escape(c) }.join(" ")
-    log = install_log_path
-    inner = "exec 0</dev/null; ( #{cmd_str} ) 2>&1 | tee #{Shellwords.escape(log)}; exit \\${PIPESTATUS[0]}"
-    if env_hash && !env_hash.empty?
-      exports = env_hash.map { |k, v| "#{k}=#{Shellwords.escape(v.to_s)}" }.join(" ")
-      inner = "export #{exports}; #{inner}"
-    end
-    system "bash", "-c", inner, :dir => libexec
-  end
-
-  # Env vars that must reach pnpm and turbo to limit workers and memory. Our defaults override ENV so Homebrew/user env cannot weaken safeguards (e.g. PNPM_WORKERS or NODE_OPTIONS).
-  def pnpm_env
-    ENV.to_h.merge(
-      "CI" => "1",
-      "npm_config_yes" => "true",
-      "TURBO_CI" => "1",
-      "TURBO_CONCURRENCY" => "1",
-      "NODE_OPTIONS" => "--max-old-space-size=4096",
-      "PNPM_WORKERS" => "999",
-    )
-  end
-
   def install
     # Example: build monorepo and install CLI.
     # Adapt to your tap's strategy (e.g. pre-built tarball, or full build).
     # Cap Node heap and concurrency so install does not exhaust system memory.
+    pnpm_env = { "NODE_OPTIONS" => "--max-old-space-size=4096", "PNPM_WORKERS" => "999" }
     check_script = buildpath/"scripts/deployment/ensure-node-memory-limit.sh"
     if check_script.exist?
       system pnpm_env, "bash", check_script.to_s, "--check"
