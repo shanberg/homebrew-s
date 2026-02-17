@@ -1,16 +1,45 @@
-# typed: false
-# frozen_string_literal: true
-
-require "shellwords"
+# Reference Homebrew formula for the Maxwell Carmody deploy CLI and agent.
+# Copy this to your tap repo (e.g. homebrew-s/Formula/maxwell-carmody.rb).
+#
+# Primary command: mc (with deploy kept for backward compatibility)
+#   mc agent          - start the deploy agent
+#   mc deploy <target>   - trigger deployment (targets from .deployment.json, e.g. staging-maxwellcarmody)
+#   mc status [target]  - show deployment state
+#   mc logs <id>      - show deployment logs
+# See docs/deployment/08-target-model-simplified.md.
+#
+# Build: Your tap will need to build the monorepo (pnpm install, build deployment
+# package and its workspace deps) and then expose the CLI. The deployment
+# package bin is at packages/deployment/bin/deploy.js (run with node against
+# built dist/ or with tsx against src/). Install both "mc" and "deploy" as
+# the same binary so `mc deploy <target>` and `deploy deploy <target>` both work.
+#
+# Trigger: When HOMEBREW_MC_TRIGGER_DEPLOY=1, post_install should run
+# scripts/deployment/trigger-deploy-after-brew.sh <commit> [env].
+# Pass the installed commit (e.g. from git rev-parse HEAD when building from
+# git, or set HOMEBREW_MC_COMMIT in the formula). Default env is staging
+# (override with HOMEBREW_MC_DEPLOY_ENV).
 
 class MaxwellCarmody < Formula
-  desc "Multi-application architecture for self-hosted services (mc/deploy, gateway, db, validate CLIs)"
+  desc "Deploy CLI and agent for Maxwell Carmody"
   homepage "https://github.com/shanberg/home-services"
-  # Private repo: no stable tarball; install from head (git clone via SSH).
-  head "git@github.com:shanberg/home-services.git", branch: "yet-again-another-deployment-flow", using: :git
-  revision 1
+  url "https://github.com/shanberg/home-services/archive/refs/tags/v1.0.0.tar.gz"
+  sha256 "" # fill with: curl -sL <url> | shasum -a 256
+  license "MIT"
+  version "1.0.0"
 
-  depends_on "node" => :build
+  # Bottles: build on your machine, host on GitHub Releases. See HOMEBREW-FORMULA.md "Bottles (GitHub Releases)".
+  # Run: brew install --build-bottle <formula> && brew bottle <formula>
+  # Create a release with tag maxwell-carmody-<version>, upload the .bottle.tar.gz, then replace this block
+  # (including root_url and all sha256 lines) with the output from brew bottle so the server can pour instead of building.
+  bottle do
+    root_url "https://github.com/shanberg/homebrew-s/releases/download/maxwell-carmody-1.0.0"
+    rebuild 0
+    sha256 arm64_sonoma: "0000000000000000000000000000000000000000000000000000000000000000"
+  end
+
+  depends_on "git"
+  depends_on "node"
   depends_on "pnpm" => :build
 
   # Default path for install log; override with HOMEBREW_MC_INSTALL_LOG. Rotated to .prev each install.
@@ -45,95 +74,93 @@ class MaxwellCarmody < Formula
   end
 
   def install
-    # Non-interactive: env + no stdin so pnpm/turbo/deps never prompt or hang.
-    # Install log: always teed to install_log_path (default /tmp/maxwell-carmody-install.log). Rotate previous to .prev.
-    log_path = install_log_path
-    if File.exist?(log_path)
-      begin
-        File.rename(log_path, "#{log_path}.prev")
-      rescue StandardError
-        File.delete(log_path) if File.exist?(log_path)
-      end
-    end
-    ENV["CI"] = "1"
-    ENV["DEBIAN_FRONTEND"] = "noninteractive" if OS.linux?
-    # pnpm_env (passed explicitly to run_no_stdin for install/build) sets NODE_OPTIONS, PNPM_WORKERS, TURBO_* so subprocess is guaranteed to see them.
-    # Exclude .git to avoid permission denied when overwriting existing libexec/.git from a previous install.
-    ohai "Copying source (rsync)..."
-    system "rsync", "-a", "--exclude", ".git", "#{buildpath}/", "#{libexec}/"
-    check_script = libexec/"scripts/deployment/ensure-node-memory-limit.sh"
+    # Example: build monorepo and install CLI.
+    # Adapt to your tap's strategy (e.g. pre-built tarball, or full build).
+    # Cap Node heap and concurrency so install does not exhaust system memory.
+    check_script = buildpath/"scripts/deployment/ensure-node-memory-limit.sh"
     if check_script.exist?
-      ohai "Checking Node memory limit..."
-      ENV["NODE_OPTIONS"] = "--max-old-space-size=4096"
-      run_no_stdin "bash", "scripts/deployment/ensure-node-memory-limit.sh", "--check"
+      system pnpm_env, "bash", check_script.to_s, "--check"
     end
-    ohai "Running pnpm install for @mc/deployment only (log: #{log_path})..."
-    # --filter @mc/deployment...: install only the deployment package and its deps, not the entire workspace (apps, Vite, Storybook, etc.). Avoids huge install and system load.
-    # --child-concurrency 1: avoid unbounded memory from parallel child processes.
-    # --ignore-scripts: skip all dependency lifecycle scripts (no postinstall can prompt).
-    # Pass pnpm_env explicitly so PNPM_WORKERS and NODE_OPTIONS are guaranteed in the subprocess (pnpm worker pool uses PNPM_WORKERS = cores to leave unused; 999 => 1 worker).
-    run_no_stdin "pnpm", "install", "--frozen-lockfile", "--filter", "@mc/deployment...", "--child-concurrency", "1", "--config.confirmModulesPurge=false", "--ignore-scripts", "--reporter", "append-only", env_hash: pnpm_env
-    ohai "Running turbo build for @mc/deployment (one task at a time)..."
-    # Build deployment CLI and its workspace deps so mc/deploy resolve @mc/* dist/
-    run_no_stdin "pnpm", "exec", "turbo", "run", "build", "--filter=@mc/deployment...", "--no-update-notifier", "--summarize", "--concurrency=1", env_hash: pnpm_env
-    ohai "Installing bin wrappers (mc, deploy, gateway, db, validate)..."
-    tsx = libexec/"node_modules/.bin/tsx"
-    deploy_js = libexec/"packages/deployment/bin/deploy.js"
+    # Limit concurrency so total memory stays bounded (one main process + one child at a time).
+    system pnpm_env, "pnpm", "install", "--frozen-lockfile", "--child-concurrency", "1"
+    system pnpm_env, "pnpm", "--filter", "@mc/deployment", "run", "build", "--workspace-concurrency=1"
+
+    # Build deployment package (and its workspace deps). Then install the built
+    # package into libexec. The repo's bin/deploy.js imports from src/ (for tsx);
+    # for node we use a wrapper that imports from dist/cli/index.js.
+    pkg_dir = buildpath/"packages/deployment"
+    libexec.install pkg_dir/"dist", pkg_dir/"package.json", pkg_dir/"docker-apps"
+    # Copy workspace packages and node_modules so @mc/* resolve at runtime.
+    # (Alternatively your tap can use a pre-built tarball that includes node_modules.)
+    cp_r buildpath/"node_modules", libexec if (buildpath/"node_modules").exist?
+    (libexec/"packages").mkdir
+    %w[config datetime dependency-manager server utils validation].each do |p|
+      cp_r buildpath/"packages/#{p}", libexec/"packages/#{p}" if (buildpath/"packages/#{p}").exist?
+    end
+
+    (libexec/"bin/cli.mjs").write <<~EOS
+      import { main } from '../dist/cli/index.js';
+      main(process.argv);
+    EOS
+
     (bin/"mc").write <<~EOS
-      #!/bin/sh
-      exec "#{tsx}" "#{deploy_js}" "$@"
+      #!/bin/bash
+      exec node "#{libexec}/bin/cli.mjs" "$@"
     EOS
     (bin/"deploy").write <<~EOS
-      #!/bin/sh
-      exec "#{tsx}" "#{deploy_js}" "$@"
+      #!/bin/bash
+      exec node "#{libexec}/bin/cli.mjs" "$@"
     EOS
-    (bin/"gateway").write <<~EOS
-      #!/bin/sh
-      exec pnpm -C "#{libexec}" run gateway "$@"
-    EOS
-    (bin/"db").write <<~EOS
-      #!/bin/sh
-      exec pnpm -C "#{libexec}" run db "$@"
-    EOS
-    (bin/"validate").write <<~EOS
-      #!/bin/sh
-      exec pnpm -C "#{libexec}" exec validate "$@"
-    EOS
-    [bin/"mc", bin/"deploy", bin/"gateway", bin/"db", bin/"validate"].each { |f| chmod 0755, f }
-    trigger_script = libexec/"scripts/deployment/trigger-deploy-after-brew.sh"
-    chmod 0755, trigger_script if trigger_script.exist?
+
+    # Trigger script for post_install
+    libexec.install buildpath/"scripts/deployment/trigger-deploy-after-brew.sh"
+    chmod 0755, libexec/"trigger-deploy-after-brew.sh"
+
+    # .env template for mc setup bootstrap
+    (share/"maxwell-carmody").mkpath
+    (share/"maxwell-carmody/env.example").write (buildpath/".env.example").read
   end
 
   def post_install
-    return unless ENV["HOMEBREW_MC_TRIGGER_DEPLOY"] == "1"
+    deploy_dir = ENV["HOMEBREW_MC_DEPLOY_DIR"] || "#{Dir.home}/maxwell-carmody"
+    repo_url = ENV["HOMEBREW_MC_REPO_URL"]
+    repo_url = "#{homepage.chomp("/")}.git" if repo_url.to_s.empty? && homepage.to_s.include?("github")
+    env_template_path = (share/"maxwell-carmody/env.example").to_s
 
-    commit = begin
-      Utils.popen_read("git", "-C", libexec, "rev-parse", "HEAD").strip
-    rescue StandardError
-      ""
+    # Single path: mc setup. Bootstrap first (dirs, clone, config, .env template), then guided if TTY.
+    system(
+      { "DEPLOY_DIR" => deploy_dir, "REPO_URL" => repo_url.to_s, "ENV_TEMPLATE_PATH" => env_template_path, "MC_SETUP_BOOTSTRAP" => "1" },
+      bin/"mc", "setup"
+    )
+    if ENV["HOMEBREW_MC_SKIP_SETUP"] != "1" && $stdin.tty?
+      system bin/"mc", "setup"
     end
-    if commit.nil? || commit.empty?
-      opoo "Could not determine install commit; run 'mc deploy staging' manually if needed."
-      return
-    end
-    script = libexec/"scripts/deployment/trigger-deploy-after-brew.sh"
-    unless script.exist?
-      opoo "Trigger script not found at #{script}; run 'mc deploy staging' manually if needed."
-      return
-    end
-    env = ENV["HOMEBREW_MC_DEPLOY_ENV"] || "staging"
-    unless system(script, commit, env)
-      opoo "Deploy trigger exited non-zero; check agent and config. Run 'mc deploy #{env}' manually if needed."
+
+    system "sudo", bin/"mc", "agent", "install", "--daemon"
+
+    if ENV["HOMEBREW_MC_TRIGGER_DEPLOY"] == "1"
+      env = ENV["HOMEBREW_MC_DEPLOY_ENV"] || "staging"
+      commit = ENV["HOMEBREW_MC_COMMIT"] || version.to_s
+      system({ "DEPLOY_DIR" => deploy_dir }, libexec/"trigger-deploy-after-brew.sh", commit, env)
     end
   end
 
+  def caveats
+    <<~EOS
+      Server setup (post_install) created ~/maxwell-carmody with directory structure,
+      config.json, and .env.staging/.env.production from template.
+      When run in a terminal, mc setup was run to configure certs and secrets interactively.
+      Run mc setup anytime to replace keys or certs.
+      Optional env vars: HOMEBREW_MC_REPO_URL, HOMEBREW_MC_DEPLOY_DIR,
+      HOMEBREW_MC_SKIP_SETUP (skip guided mc setup),
+      HOMEBREW_MC_TRIGGER_DEPLOY, HOMEBREW_MC_DEPLOY_ENV.
+      To run the deploy agent at boot (server): post_install ran sudo mc agent install --daemon unless skipped.
+      Verify with: mc agent status
+      To fully uninstall: first run sudo mc agent uninstall --daemon, then brew uninstall maxwell-carmody.
+    EOS
+  end
+
   test do
-    mc_out = shell_output("#{bin}/mc --help 2>&1")
-    assert_match(/Usage:.*(mc|deploy).*command/, mc_out, "mc --help should print usage")
-    deploy_out = shell_output("#{bin}/deploy --help 2>&1")
-    assert_match(/Usage:.*(mc|deploy).*command/, deploy_out, "deploy --help should print usage")
-    assert_match(/Usage: gateway/, shell_output("#{bin}/gateway 2>&1"))
-    assert_match(/Usage: db/, shell_output("#{bin}/db 2>&1"))
-    assert_match(/validate/, shell_output("#{bin}/validate --help 2>&1"))
+    assert_match "Usage: mc <command>", shell_output("#{bin}/mc --help", 1)
   end
 end
