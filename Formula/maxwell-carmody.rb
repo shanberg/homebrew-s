@@ -32,16 +32,16 @@ class MaxwellCarmody < Formula
     system "bash", "-c", inner, :dir => libexec
   end
 
-  # Env vars that must reach pnpm and turbo to limit workers and memory. Injected into the shell via export so the subprocess is guaranteed to see them.
+  # Env vars that must reach pnpm and turbo to limit workers and memory. Our defaults override ENV so Homebrew/user env cannot weaken safeguards (e.g. PNPM_WORKERS or NODE_OPTIONS).
   def pnpm_env
-    {
+    ENV.to_h.merge(
       "CI" => "1",
       "npm_config_yes" => "true",
       "TURBO_CI" => "1",
       "TURBO_CONCURRENCY" => "1",
       "NODE_OPTIONS" => "--max-old-space-size=4096",
       "PNPM_WORKERS" => "999",
-    }.merge(ENV.to_h)
+    )
   end
 
   def install
