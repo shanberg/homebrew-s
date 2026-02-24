@@ -21,6 +21,7 @@ brew install --HEAD shanberg/shanberg/<formula>
 | Formula | Description |
 |---------|-------------|
 | [now](Formula/now.rb) | Minimal, terminal-based focus/task tree (TUI + CLI) |
+| [project-manager](Formula/project-manager.rb) | CLI for PARA-style project creation with domain-based numbering (`pm`) |
 
 ## Updating
 
