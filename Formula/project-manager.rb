@@ -25,7 +25,8 @@ class GitHubPrivateRepositoryArchiveDownloadStrategy < CurlDownloadStrategy
     @owner = match[1]
     @repo = match[2]
     @filepath = match[3]
-    @ref = if (m = @filepath.match(%r{refs/heads/(.+)\.tar\.gz}))
+    # refs/heads/main or refs/tags/v0.1.0 → ref for API tarball
+    @ref = if (m = @filepath.match(%r{refs/(?:heads|tags)/(.+)\.tar\.gz}))
       m[1]
     else
       File.basename(@filepath, ".tar.gz")
@@ -58,9 +59,10 @@ end
 class ProjectManager < Formula
   desc "CLI for PARA-style project creation with domain-based numbering"
   homepage "https://github.com/shanberg/project-manager"
-  url "https://github.com/shanberg/project-manager/archive/refs/heads/main.tar.gz",
+  # Use a tag so the tarball is immutable and sha256 is stable (branch URLs change every commit).
+  url "https://github.com/shanberg/project-manager/archive/refs/tags/v0.1.0.tar.gz",
       using: GitHubPrivateRepositoryArchiveDownloadStrategy
-  sha256 "0019dfc4b32d63c1392aa264aed2253c1e0c2fb09216f8e2cc269bbfb8bb49b5"
+  sha256 "399956b7ca07f9cf427aecc01844091cb7b20f4b98d512ecbceef6cc162b28a8"
   version "0.1.0"
   head "https://github.com/shanberg/project-manager.git", branch: "main"
 
