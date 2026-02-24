@@ -120,10 +120,10 @@ class ProjectManager < Formula
   desc "CLI for PARA-style project creation with domain-based numbering"
   homepage "https://github.com/shanberg/project-manager"
   # Release asset = git archive tarball (deterministic sha256). API tarball varies by request.
-  url "https://github.com/shanberg/project-manager/releases/download/v0.1.6/project-manager-0.1.6.tar.gz",
+  url "https://github.com/shanberg/project-manager/releases/download/v0.1.7/project-manager-0.1.7.tar.gz",
       using: GitHubPrivateReleaseDownloadStrategy
-  sha256 "7762ea12522c3f410de2affde8a732f796861f7e9ded86f3060252f496d984bf"
-  version "0.1.6"
+  sha256 "bfd5df30ee2fc4a5b980786c2748fc7d5d05b50e2a93c79e757e64753d798fc7"
+  version "0.1.7"
   head "https://github.com/shanberg/project-manager.git", branch: "main"
 
   depends_on "node"
