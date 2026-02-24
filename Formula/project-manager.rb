@@ -140,7 +140,7 @@ class ProjectManager < Formula
     odie "No GitHub token. Set HOMEBREW_GITHUB_API_TOKEN or GITHUB_TOKEN (gh is not in PATH in the build env)." if token.to_s.empty?
     # Homebrew stages the tarball and chdirs into its single top-level dir (project-manager-VERSION) before calling install; buildpath is that dir.
     cd buildpath do
-      (Pathname.pwd/".npmrc").write("//npm.pkg.github.com/:_authToken=#{token}\n")
+      (Pathname.pwd/".npmrc").write("@shanberg:registry=https://npm.pkg.github.com/\n//npm.pkg.github.com/:_authToken=#{token}\n")
       ENV["npm_config_cache"] = "#{HOMEBREW_CACHE}/npm_cache"
       system "npm", "install", "--ignore-scripts"
       system "npm", "run", "build"
