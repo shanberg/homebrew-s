@@ -60,10 +60,10 @@ class ProjectManager < Formula
   desc "CLI for PARA-style project creation with domain-based numbering"
   homepage "https://github.com/shanberg/project-manager"
   # Use a tag so the tarball is immutable and sha256 is stable (branch URLs change every commit).
-  url "https://github.com/shanberg/project-manager/archive/refs/tags/v0.1.0.tar.gz",
+  url "https://github.com/shanberg/project-manager/archive/refs/tags/v0.1.1.tar.gz",
       using: GitHubPrivateRepositoryArchiveDownloadStrategy
-  sha256 "399956b7ca07f9cf427aecc01844091cb7b20f4b98d512ecbceef6cc162b28a8"
-  version "0.1.0"
+  sha256 "4e0fd790a854b2caea086f297031b3c5721ceb38b956de8b7a54996cf63e747f"
+  version "0.1.1"
   head "https://github.com/shanberg/project-manager.git", branch: "main"
 
   depends_on "node"
