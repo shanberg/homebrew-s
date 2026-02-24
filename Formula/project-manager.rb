@@ -6,10 +6,8 @@ require "download_strategy"
 require "json"
 
 # Install runs in a sandbox with stripped ENV; download runs with user ENV. Persist token
-# from download so install can read it (then we delete the file).
-def project_manager_token_file
-  "#{ENV["HOMEBREW_CACHE"]}/.project-manager-github-token"
-end
+# from download so install can read it (then we delete the file). Constant so strategy sees it in isolated namespace.
+PROJECT_MANAGER_TOKEN_FILE = "#{ENV["HOMEBREW_CACHE"]}/.project-manager-github-token".freeze
 
 class GitHubPrivateRepositoryArchiveDownloadStrategy < CurlDownloadStrategy
   def initialize(url, name, version, **meta)
@@ -114,7 +112,7 @@ class GitHubPrivateReleaseDownloadStrategy < CurlDownloadStrategy
     gh_path = "#{HOMEBREW_PREFIX}/opt/gh/bin/gh"
     @github_token = `"#{gh_path}" auth token 2>/dev/null`.to_s.strip if @github_token.empty? && File.exist?(gh_path)
     raise CurlDownloadStrategyError, "No GitHub token. Set HOMEBREW_GITHUB_API_TOKEN or GITHUB_TOKEN (gh is not in PATH in the build env)." if @github_token.empty?
-    File.write(project_manager_token_file, @github_token)
+    File.write(PROJECT_MANAGER_TOKEN_FILE, @github_token)
   end
 end
 
@@ -132,8 +130,8 @@ class ProjectManager < Formula
 
   def install
     token = nil
-    token = File.read(project_manager_token_file).strip if File.exist?(project_manager_token_file)
-    File.delete(project_manager_token_file) if File.exist?(project_manager_token_file)
+    token = File.read(PROJECT_MANAGER_TOKEN_FILE).strip if File.exist?(PROJECT_MANAGER_TOKEN_FILE)
+    File.delete(PROJECT_MANAGER_TOKEN_FILE) if File.exist?(PROJECT_MANAGER_TOKEN_FILE)
     token = (ENV["HOMEBREW_GITHUB_API_TOKEN"] || ENV["GITHUB_TOKEN"]).to_s.strip if token.to_s.empty?
     if token.to_s.empty?
       gh_path = "#{HOMEBREW_PREFIX}/opt/gh/bin/gh"
