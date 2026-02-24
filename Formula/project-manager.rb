@@ -120,10 +120,10 @@ class ProjectManager < Formula
   desc "CLI for PARA-style project creation with domain-based numbering"
   homepage "https://github.com/shanberg/project-manager"
   # Release asset = git archive tarball (deterministic sha256). API tarball varies by request.
-  url "https://github.com/shanberg/project-manager/releases/download/v0.1.7/project-manager-0.1.7.tar.gz",
+  url "https://github.com/shanberg/project-manager/releases/download/v0.1.6/project-manager-0.1.6.tar.gz",
       using: GitHubPrivateReleaseDownloadStrategy
-  sha256 "bfd5df30ee2fc4a5b980786c2748fc7d5d05b50e2a93c79e757e64753d798fc7"
-  version "0.1.7"
+  sha256 "7762ea12522c3f410de2affde8a732f796861f7e9ded86f3060252f496d984bf"
+  version "0.1.6"
   head "https://github.com/shanberg/project-manager.git", branch: "main"
 
   depends_on "node"
@@ -138,8 +138,10 @@ class ProjectManager < Formula
       token = `"#{gh_path}" auth token 2>/dev/null`.to_s.strip if File.exist?(gh_path)
     end
     odie "No GitHub token. Set HOMEBREW_GITHUB_API_TOKEN or GITHUB_TOKEN (gh is not in PATH in the build env)." if token.to_s.empty?
-    # Tarball has one top-level dir: project-manager-VERSION (from git archive)
-    cd Dir.glob("*").find { |f| File.directory?(f) } do
+    # Tarball has one top-level dir project-manager-VERSION; Homebrew may set buildpath to it, so prefer dir that has package.json
+    project_dir = File.exist?("package.json") ? "." : Dir.glob("*").find { |f| File.directory?(f) && File.exist?(File.join(f, "package.json")) }
+    odie "project-manager: package.json not found" unless project_dir
+    cd project_dir do
       (Pathname.pwd/".npmrc").write("//npm.pkg.github.com/:_authToken=#{token}\n")
       ENV["npm_config_cache"] = "#{HOMEBREW_CACHE}/npm_cache"
       system "npm", "install"
