@@ -5,6 +5,12 @@
 require "download_strategy"
 require "json"
 
+# Install runs in a sandbox with stripped ENV; download runs with user ENV. Persist token
+# from download so install can read it (then we delete the file).
+def project_manager_token_file
+  "#{ENV["HOMEBREW_CACHE"]}/.project-manager-github-token"
+end
+
 class GitHubPrivateRepositoryArchiveDownloadStrategy < CurlDownloadStrategy
   def initialize(url, name, version, **meta)
     parse_url_pattern(url)
@@ -108,6 +114,7 @@ class GitHubPrivateReleaseDownloadStrategy < CurlDownloadStrategy
     gh_path = "#{HOMEBREW_PREFIX}/opt/gh/bin/gh"
     @github_token = `"#{gh_path}" auth token 2>/dev/null`.to_s.strip if @github_token.empty? && File.exist?(gh_path)
     raise CurlDownloadStrategyError, "No GitHub token. Set HOMEBREW_GITHUB_API_TOKEN or GITHUB_TOKEN (gh is not in PATH in the build env)." if @github_token.empty?
+    File.write(project_manager_token_file, @github_token)
   end
 end
 
@@ -124,10 +131,15 @@ class ProjectManager < Formula
   depends_on "node"
 
   def install
-    token = (ENV["HOMEBREW_GITHUB_API_TOKEN"] || ENV["GITHUB_TOKEN"]).to_s.strip
-    gh_path = "#{HOMEBREW_PREFIX}/opt/gh/bin/gh"
-    token = `"#{gh_path}" auth token 2>/dev/null`.to_s.strip if token.empty? && File.exist?(gh_path)
-    odie "No GitHub token. Set HOMEBREW_GITHUB_API_TOKEN or GITHUB_TOKEN (gh is not in PATH in the build env)." if token.empty?
+    token = nil
+    token = File.read(project_manager_token_file).strip if File.exist?(project_manager_token_file)
+    File.delete(project_manager_token_file) if File.exist?(project_manager_token_file)
+    token = (ENV["HOMEBREW_GITHUB_API_TOKEN"] || ENV["GITHUB_TOKEN"]).to_s.strip if token.to_s.empty?
+    if token.to_s.empty?
+      gh_path = "#{HOMEBREW_PREFIX}/opt/gh/bin/gh"
+      token = `"#{gh_path}" auth token 2>/dev/null`.to_s.strip if File.exist?(gh_path)
+    end
+    odie "No GitHub token. Set HOMEBREW_GITHUB_API_TOKEN or GITHUB_TOKEN (gh is not in PATH in the build env)." if token.to_s.empty?
     # Tarball has one top-level dir: project-manager-VERSION (from git archive)
     cd Dir.glob("*").find { |f| File.directory?(f) } do
       (Pathname.pwd/".npmrc").write("//npm.pkg.github.com/:_authToken=#{token}\n")
