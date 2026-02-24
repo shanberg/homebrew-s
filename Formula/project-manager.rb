@@ -53,8 +53,9 @@ class GitHubPrivateRepositoryArchiveDownloadStrategy < CurlDownloadStrategy
 
   def set_github_token
     @github_token = (ENV["HOMEBREW_GITHUB_API_TOKEN"] || ENV["GITHUB_TOKEN"]).to_s.strip
-    @github_token = `gh auth token 2>/dev/null`.to_s.strip if @github_token.empty? && system("which gh >/dev/null 2>&1")
-    raise CurlDownloadStrategyError, "No GitHub token. Run 'gh auth login' or set HOMEBREW_GITHUB_API_TOKEN / GITHUB_TOKEN." if @github_token.empty?
+    gh_path = "#{HOMEBREW_PREFIX}/opt/gh/bin/gh"
+    @github_token = `"#{gh_path}" auth token 2>/dev/null`.to_s.strip if @github_token.empty? && File.exist?(gh_path)
+    raise CurlDownloadStrategyError, "No GitHub token. Set HOMEBREW_GITHUB_API_TOKEN or GITHUB_TOKEN (gh is not in PATH in the build env)." if @github_token.empty?
   end
 end
 
@@ -104,8 +105,9 @@ class GitHubPrivateReleaseDownloadStrategy < CurlDownloadStrategy
 
   def set_github_token
     @github_token = (ENV["HOMEBREW_GITHUB_API_TOKEN"] || ENV["GITHUB_TOKEN"]).to_s.strip
-    @github_token = `gh auth token 2>/dev/null`.to_s.strip if @github_token.empty? && system("which gh >/dev/null 2>&1")
-    raise CurlDownloadStrategyError, "No GitHub token. Run 'gh auth login' or set HOMEBREW_GITHUB_API_TOKEN / GITHUB_TOKEN." if @github_token.empty?
+    gh_path = "#{HOMEBREW_PREFIX}/opt/gh/bin/gh"
+    @github_token = `"#{gh_path}" auth token 2>/dev/null`.to_s.strip if @github_token.empty? && File.exist?(gh_path)
+    raise CurlDownloadStrategyError, "No GitHub token. Set HOMEBREW_GITHUB_API_TOKEN or GITHUB_TOKEN (gh is not in PATH in the build env)." if @github_token.empty?
   end
 end
 
@@ -123,8 +125,9 @@ class ProjectManager < Formula
 
   def install
     token = (ENV["HOMEBREW_GITHUB_API_TOKEN"] || ENV["GITHUB_TOKEN"]).to_s.strip
-    token = `gh auth token 2>/dev/null`.to_s.strip if token.empty? && system("which gh >/dev/null 2>&1")
-    odie "No GitHub token. Run 'gh auth login' or set HOMEBREW_GITHUB_API_TOKEN / GITHUB_TOKEN." if token.empty?
+    gh_path = "#{HOMEBREW_PREFIX}/opt/gh/bin/gh"
+    token = `"#{gh_path}" auth token 2>/dev/null`.to_s.strip if token.empty? && File.exist?(gh_path)
+    odie "No GitHub token. Set HOMEBREW_GITHUB_API_TOKEN or GITHUB_TOKEN (gh is not in PATH in the build env)." if token.empty?
     # Tarball has one top-level dir: project-manager-VERSION (from git archive)
     cd Dir.glob("*").find { |f| File.directory?(f) } do
       (Pathname.pwd/".npmrc").write("//npm.pkg.github.com/:_authToken=#{token}\n")
