@@ -6,13 +6,16 @@ require "download_strategy"
 
 class GitHubPrivateRepositoryArchiveDownloadStrategy < CurlDownloadStrategy
   def initialize(url, name, version, **meta)
-    super
-    parse_url_pattern
+    parse_url_pattern(url)
     set_github_token
+    meta[:headers] ||= []
+    meta[:headers] << "Authorization: Bearer #{@github_token}"
+    meta[:headers] << "Accept: application/vnd.github+json"
+    super
     ohai "Downloading from private GitHub (HOMEBREW_GITHUB_API_TOKEN in use)"
   end
 
-  def parse_url_pattern
+  def parse_url_pattern(url)
     unless (match = url.match(%r{https://github\.com/([^/]+)/([^/]+)/(.+)}))
       raise CurlDownloadStrategyError, "Invalid url pattern for GitHub repository archive."
     end
@@ -20,10 +23,16 @@ class GitHubPrivateRepositoryArchiveDownloadStrategy < CurlDownloadStrategy
     @owner = match[1]
     @repo = match[2]
     @filepath = match[3]
+    @ref = if (m = @filepath.match(%r{refs/heads/(.+)\.tar\.gz}))
+      m[1]
+    else
+      File.basename(@filepath, ".tar.gz")
+    end
   end
 
+  # Use API URL so redirect to codeload.github.com is authenticated correctly.
   def download_url
-    "https://#{@github_token}@github.com/#{@owner}/#{@repo}/#{@filepath}"
+    "https://api.github.com/repos/#{@owner}/#{@repo}/tarball/#{@ref}"
   end
 
   def resolve_url_basename_time_file_size(url, timeout: nil)
@@ -52,7 +61,8 @@ class ProjectManager < Formula
   depends_on "node"
 
   def install
-    cd "project-manager-main" do
+    # API tarball has one top-level dir: owner-repo-sha (not project-manager-main)
+    cd Dir.glob("*").find { |f| File.directory?(f) } do
       ENV["npm_config_cache"] = "#{HOMEBREW_CACHE}/npm_cache"
       system "npm", "install"
       system "npm", "run", "build"
