@@ -4,6 +4,15 @@
 # Inlined so the formula works regardless of tap layout; no require_relative.
 require "download_strategy"
 
+def github_token_for_formula
+  token = ENV["HOMEBREW_GITHUB_API_TOKEN"] || ENV["GITHUB_TOKEN"]
+  token = token.to_s.strip
+  if token.empty? && system("which gh >/dev/null 2>&1")
+    token = `gh auth token 2>/dev/null`.to_s.strip
+  end
+  token
+end
+
 class GitHubPrivateRepositoryArchiveDownloadStrategy < CurlDownloadStrategy
   def initialize(url, name, version, **meta)
     parse_url_pattern(url)
@@ -51,8 +60,8 @@ class GitHubPrivateRepositoryArchiveDownloadStrategy < CurlDownloadStrategy
   end
 
   def set_github_token
-    @github_token = ENV["HOMEBREW_GITHUB_API_TOKEN"] || ENV["GITHUB_TOKEN"]
-    raise CurlDownloadStrategyError, "Set HOMEBREW_GITHUB_API_TOKEN or GITHUB_TOKEN (e.g. in ~/.zshrc: export HOMEBREW_GITHUB_API_TOKEN=...)." if @github_token.to_s.empty?
+    @github_token = github_token_for_formula
+    raise CurlDownloadStrategyError, "No GitHub token. Run 'gh auth login' or set HOMEBREW_GITHUB_API_TOKEN / GITHUB_TOKEN." if @github_token.to_s.empty?
   end
 end
 
@@ -85,8 +94,8 @@ class GitHubPrivateReleaseDownloadStrategy < CurlDownloadStrategy
   end
 
   def set_github_token
-    @github_token = ENV["HOMEBREW_GITHUB_API_TOKEN"] || ENV["GITHUB_TOKEN"]
-    raise CurlDownloadStrategyError, "Set HOMEBREW_GITHUB_API_TOKEN or GITHUB_TOKEN (e.g. in ~/.zshrc: export HOMEBREW_GITHUB_API_TOKEN=...)." if @github_token.to_s.empty?
+    @github_token = github_token_for_formula
+    raise CurlDownloadStrategyError, "No GitHub token. Run 'gh auth login' or set HOMEBREW_GITHUB_API_TOKEN / GITHUB_TOKEN." if @github_token.to_s.empty?
   end
 end
 
@@ -103,8 +112,8 @@ class ProjectManager < Formula
   depends_on "node"
 
   def install
-    token = ENV["HOMEBREW_GITHUB_API_TOKEN"] || ENV["GITHUB_TOKEN"]
-    odie "Set HOMEBREW_GITHUB_API_TOKEN or GITHUB_TOKEN (e.g. in ~/.zshrc: export HOMEBREW_GITHUB_API_TOKEN=...)." if token.to_s.empty?
+    token = github_token_for_formula
+    odie "No GitHub token. Run 'gh auth login' or set HOMEBREW_GITHUB_API_TOKEN / GITHUB_TOKEN." if token.to_s.empty?
     # Tarball has one top-level dir: project-manager-VERSION (from git archive)
     cd Dir.glob("*").find { |f| File.directory?(f) } do
       (Pathname.pwd/".npmrc").write("//npm.pkg.github.com/:_authToken=#{token}\n")
