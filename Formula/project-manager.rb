@@ -69,8 +69,11 @@ class ProjectManager < Formula
   depends_on "node"
 
   def install
+    token = ENV["HOMEBREW_GITHUB_API_TOKEN"]
+    odie "HOMEBREW_GITHUB_API_TOKEN is required (private tarball and @shanberg/project-schema)" if token.to_s.empty?
     # API tarball has one top-level dir: owner-repo-sha (not project-manager-main)
     cd Dir.glob("*").find { |f| File.directory?(f) } do
+      (Pathname.pwd/".npmrc").write("//npm.pkg.github.com/:_authToken=#{token}\n")
       ENV["npm_config_cache"] = "#{HOMEBREW_CACHE}/npm_cache"
       system "npm", "install"
       system "npm", "run", "build"
