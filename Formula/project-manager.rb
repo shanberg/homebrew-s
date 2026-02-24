@@ -138,13 +138,11 @@ class ProjectManager < Formula
       token = `"#{gh_path}" auth token 2>/dev/null`.to_s.strip if File.exist?(gh_path)
     end
     odie "No GitHub token. Set HOMEBREW_GITHUB_API_TOKEN or GITHUB_TOKEN (gh is not in PATH in the build env)." if token.to_s.empty?
-    # Tarball has one top-level dir project-manager-VERSION; Homebrew may set buildpath to it, so prefer dir that has package.json
-    project_dir = File.exist?("package.json") ? "." : Dir.glob("*").find { |f| File.directory?(f) && File.exist?(File.join(f, "package.json")) }
-    odie "project-manager: package.json not found" unless project_dir
-    cd project_dir do
+    # Homebrew stages the tarball and chdirs into its single top-level dir (project-manager-VERSION) before calling install; buildpath is that dir.
+    cd buildpath do
       (Pathname.pwd/".npmrc").write("//npm.pkg.github.com/:_authToken=#{token}\n")
       ENV["npm_config_cache"] = "#{HOMEBREW_CACHE}/npm_cache"
-      system "npm", "install"
+      system "npm", "install", "--ignore-scripts"
       system "npm", "run", "build"
       libexec.install "dist", "node_modules", "package.json"
     end
