@@ -56,13 +56,47 @@ class GitHubPrivateRepositoryArchiveDownloadStrategy < CurlDownloadStrategy
   end
 end
 
+# Deterministic tarball from release asset (git archive); avoids API tarball checksum variance.
+class GitHubPrivateReleaseDownloadStrategy < CurlDownloadStrategy
+  def initialize(url, name, version, **meta)
+    @release_url = url
+    set_github_token
+    meta[:headers] ||= []
+    auth = @github_token.start_with?("ghp_") ? "token #{@github_token}" : "Bearer #{@github_token}"
+    meta[:headers] << "Authorization: #{auth}"
+    meta[:headers] << "Accept: application/octet-stream"
+    super
+    ohai "Downloading from private GitHub release (HOMEBREW_GITHUB_API_TOKEN in use)"
+  end
+
+  def download_url
+    @release_url
+  end
+
+  def resolve_url_basename_time_file_size(url, timeout: nil)
+    [@release_url, File.basename(@release_url.split("?").first), nil, nil, nil, false]
+  end
+
+  def _fetch(url:, resolved_url:, timeout: nil)
+    curl_download @release_url, to: temporary_path, timeout:
+  rescue ErrorDuringExecution => e
+    raise CurlDownloadStrategyError,
+          "Private GitHub release download failed. Check HOMEBREW_GITHUB_API_TOKEN."
+  end
+
+  def set_github_token
+    @github_token = ENV["HOMEBREW_GITHUB_API_TOKEN"]
+    raise CurlDownloadStrategyError, "HOMEBREW_GITHUB_API_TOKEN is required for private repos." if @github_token.to_s.empty?
+  end
+end
+
 class ProjectManager < Formula
   desc "CLI for PARA-style project creation with domain-based numbering"
   homepage "https://github.com/shanberg/project-manager"
-  # Use a tag so the tarball is immutable and sha256 is stable (branch URLs change every commit).
-  url "https://github.com/shanberg/project-manager/archive/refs/tags/v0.1.6.tar.gz",
-      using: GitHubPrivateRepositoryArchiveDownloadStrategy
-  sha256 "d77e0ae4ad97e268a84fdef5a21c50202d9448829769b9fe09ea7f1317f2ca38"
+  # Release asset = git archive tarball (deterministic sha256). API tarball varies by request.
+  url "https://github.com/shanberg/project-manager/releases/download/v0.1.6/project-manager-0.1.6.tar.gz",
+      using: GitHubPrivateReleaseDownloadStrategy
+  sha256 "7762ea12522c3f410de2affde8a732f796861f7e9ded86f3060252f496d984bf"
   version "0.1.6"
   head "https://github.com/shanberg/project-manager.git", branch: "main"
 
@@ -71,7 +105,7 @@ class ProjectManager < Formula
   def install
     token = ENV["HOMEBREW_GITHUB_API_TOKEN"]
     odie "HOMEBREW_GITHUB_API_TOKEN is required (private tarball and @shanberg/project-schema)" if token.to_s.empty?
-    # API tarball has one top-level dir: owner-repo-sha (not project-manager-main)
+    # Tarball has one top-level dir: project-manager-VERSION (from git archive)
     cd Dir.glob("*").find { |f| File.directory?(f) } do
       (Pathname.pwd/".npmrc").write("//npm.pkg.github.com/:_authToken=#{token}\n")
       ENV["npm_config_cache"] = "#{HOMEBREW_CACHE}/npm_cache"
