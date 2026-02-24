@@ -62,7 +62,7 @@ class ProjectManager < Formula
   # Use a tag so the tarball is immutable and sha256 is stable (branch URLs change every commit).
   url "https://github.com/shanberg/project-manager/archive/refs/tags/v0.1.5.tar.gz",
       using: GitHubPrivateRepositoryArchiveDownloadStrategy
-  sha256 "d3c45fa618380170992668638385721fad648450616883f240664e78a52654c7"
+  sha256 "875ea4453d324c383c10b5b5bd9fd23e118b8066668e97afcbf4851ce33d23f3"
   version "0.1.5"
   head "https://github.com/shanberg/project-manager.git", branch: "main"
 
