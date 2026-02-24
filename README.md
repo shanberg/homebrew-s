@@ -5,7 +5,7 @@ Personal Homebrew tap for shanberg tools and utilities.
 ## Setup
 
 ```bash
-brew tap shanberg/shanberg
+brew tap shanberg/s
 ```
 
 ## Install
@@ -13,7 +13,7 @@ brew tap shanberg/shanberg
 After tapping, install formulae by name. Use `--HEAD` for HEAD-only formulae:
 
 ```bash
-brew install --HEAD shanberg/shanberg/<formula>
+brew install --HEAD shanberg/s/<formula>
 ```
 
 ## Formulae
