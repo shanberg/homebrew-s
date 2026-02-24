@@ -63,7 +63,7 @@ class ProjectManager < Formula
   url "https://github.com/shanberg/project-manager/archive/refs/tags/v0.1.3.tar.gz",
       using: GitHubPrivateRepositoryArchiveDownloadStrategy
   sha256 "780936a80d0a9471c9d7e17fe04675aaf02e2ba901c4453bc8d7aa107f37a41d"
-  .1.2"
+  version "0.1.3"
   head "https://github.com/shanberg/project-manager.git", branch: "main"
 
   depends_on "node"
