@@ -3,6 +3,7 @@
 
 # Inlined so the formula works regardless of tap layout; no require_relative.
 require "download_strategy"
+require "json"
 
 class GitHubPrivateRepositoryArchiveDownloadStrategy < CurlDownloadStrategy
   def initialize(url, name, version, **meta)
@@ -57,17 +58,22 @@ class GitHubPrivateRepositoryArchiveDownloadStrategy < CurlDownloadStrategy
   end
 end
 
-# Deterministic tarball from release asset (git archive); avoids API tarball checksum variance.
+# Deterministic tarball from release asset (git archive). Private repos require the
+# releases API (GET .../releases/assets/ID); the browser download URL does not accept Auth.
 class GitHubPrivateReleaseDownloadStrategy < CurlDownloadStrategy
   def initialize(url, name, version, **meta)
     @release_url = url
     set_github_token
+    parse_release_url
     meta[:headers] ||= []
-    auth = @github_token.start_with?("ghp_") ? "token #{@github_token}" : "Bearer #{@github_token}"
-    meta[:headers] << "Authorization: #{auth}"
-    meta[:headers] << "Accept: application/octet-stream"
     super
     ohai "Downloading from private GitHub release (HOMEBREW_GITHUB_API_TOKEN in use)"
+  end
+
+  def parse_release_url
+    m = @release_url.match(%r{github\.com/([^/]+)/([^/]+)/releases/download/([^/]+)/(.+)$})
+    raise CurlDownloadStrategyError, "Invalid release URL: #{@release_url}" unless m
+    @owner, @repo, @tag, @asset_name = m[1], m[2], m[3], m[4]
   end
 
   def download_url
@@ -79,10 +85,21 @@ class GitHubPrivateReleaseDownloadStrategy < CurlDownloadStrategy
   end
 
   def _fetch(url:, resolved_url:, timeout: nil)
-    curl_download @release_url, to: temporary_path, timeout:
+    auth = @github_token.start_with?("ghp_") ? "token #{@github_token}" : "Bearer #{@github_token}"
+    # Get release by tag to find asset id (required for private repo asset download)
+    release_json = `curl -sL -H "Authorization: #{auth}" -H "Accept: application/vnd.github+json" "https://api.github.com/repos/#{@owner}/#{@repo}/releases/tags/#{@tag}"`.strip
+    release = JSON.parse(release_json)
+    asset = release["assets"]&.find { |a| a["name"] == @asset_name }
+    raise CurlDownloadStrategyError, "Asset #{@asset_name} not found in release #{@tag}." unless asset
+    asset_url = "https://api.github.com/repos/#{@owner}/#{@repo}/releases/assets/#{asset['id']}"
+    curl_download asset_url,
+      "-L", "--header", "Authorization: #{auth}", "--header", "Accept: application/octet-stream",
+      to: temporary_path, timeout:
+  rescue JSON::ParserError, KeyError => e
+    raise CurlDownloadStrategyError, "Private GitHub release download failed: #{e.message}"
   rescue ErrorDuringExecution => e
     raise CurlDownloadStrategyError,
-          "Private GitHub release download failed. Set HOMEBREW_GITHUB_API_TOKEN or GITHUB_TOKEN and ensure the token has repo scope."
+          "Private GitHub release download failed. Ensure token has repo scope and release #{@tag} exists."
   end
 
   def set_github_token
