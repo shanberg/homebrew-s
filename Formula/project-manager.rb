@@ -9,7 +9,9 @@ class GitHubPrivateRepositoryArchiveDownloadStrategy < CurlDownloadStrategy
     parse_url_pattern(url)
     set_github_token
     meta[:headers] ||= []
-    meta[:headers] << "Authorization: Bearer #{@github_token}"
+    # Classic PAT (ghp_*) often needs "token "; fine-grained (github_pat_*) uses "Bearer "
+    auth = @github_token.start_with?("ghp_") ? "token #{@github_token}" : "Bearer #{@github_token}"
+    meta[:headers] << "Authorization: #{auth}"
     meta[:headers] << "Accept: application/vnd.github+json"
     super
     ohai "Downloading from private GitHub (HOMEBREW_GITHUB_API_TOKEN in use)"
@@ -41,6 +43,10 @@ class GitHubPrivateRepositoryArchiveDownloadStrategy < CurlDownloadStrategy
 
   def _fetch(url:, resolved_url:, timeout: nil)
     curl_download download_url, to: temporary_path, timeout:
+  rescue ErrorDuringExecution => e
+    raise CurlDownloadStrategyError,
+          "Private GitHub archive download failed. " \
+          "Check token: curl -sI -H 'Authorization: token YOUR_TOKEN' '#{download_url}'"
   end
 
   def set_github_token
