@@ -1,17 +1,18 @@
 # frozen_string_literal: true
 
 cask "pm" do
-  version "0.10.0"
-  sha256 "e77b545ac850a84013c8848117ca4a1e5c4e3ca049b4e8b295f228e92579b334"
+  version "0.11.0"
+  sha256 "5669365b07a27b48f6fa2e2676d35ff4b7b83f64b1fd8c83f335e1912bb59d29"
 
   url "https://github.com/shanberg/project-manager/releases/download/v#{version}/PM-v#{version}.zip"
   name "PM"
   desc "Menubar app for PARA-style project management (Project Manager)"
   homepage "https://github.com/shanberg/project-manager"
 
-  # Apple Silicon only, macOS 13+ — matches the Developer ID / notarized build.
+  # Apple Silicon only, macOS 26+ — matches the app's deployment target and the
+  # Developer ID / notarized build.
   depends_on arch:  :arm64
-  depends_on macos: :ventura
+  depends_on macos: :tahoe
 
   # The CLI (`pm`) is the companion; not a hard requirement, but they share config.
   app "PM.app"
