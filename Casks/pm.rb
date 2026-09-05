@@ -21,9 +21,17 @@ cask "pm" do
 
   # Only remove app-owned state on `--zap`. Deliberately NOT touching ~/.config/pm —
   # that config is shared with the `project-manager` CLI formula, which owns it.
+  #
+  # ~/Library/WebKit holds the browsing session behind canvas web cards: the cookies and local
+  # storage for every site signed into from a card. It is the most personal thing the app keeps,
+  # and by far the largest, so leaving it behind on a zap would be the wrong way round.
   zap trash: [
+    "~/Library/Application Support/com.stuarthanberg.pm",
     "~/Library/Caches/com.stuarthanberg.pm",
+    "~/Library/HTTPStorages/com.stuarthanberg.pm",
+    "~/Library/HTTPStorages/com.stuarthanberg.pm.binarycookies",
     "~/Library/Preferences/com.stuarthanberg.pm.plist",
     "~/Library/Saved Application State/com.stuarthanberg.pm.savedState",
+    "~/Library/WebKit/com.stuarthanberg.pm",
   ]
 end
