@@ -1,8 +1,8 @@
 # frozen_string_literal: true
 
 cask "pm" do
-  version "0.30.0"
-  sha256 "7d38dc6c91cb01a10053b378bd14d8f3a79a6dd57df362c5071ed6a8306cd340"
+  version "0.31.0"
+  sha256 "a11c4e020dae60c5b021045e04dbaf9287e8b022eea27464c2518e268844e0ef"
 
   url "https://github.com/shanberg/project-manager/releases/download/v#{version}/PM-v#{version}.zip"
   name "PM"
