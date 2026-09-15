@@ -1,11 +1,11 @@
 # frozen_string_literal: true
 
 cask "pm" do
-  version "0.40.0"
-  sha256 "3d82974855d74f49a3dbd29ee3ef11a745801ec03644ba7d182315591ac4a704"
+  version "0.41.0"
+  sha256 "56588991005cac89e5f7b55d27b16a0fb35b133a21ebf6e268c300d2630e537d"
 
-  url "https://github.com/shanberg/project-manager/releases/download/v#{version}/PM-v#{version}.zip"
-  name "PM"
+  url "https://github.com/shanberg/project-manager/releases/download/v#{version}/Folio-v#{version}.zip"
+  name "Folio"
   desc "Menubar app for PARA-style project management (Project Manager)"
   homepage "https://github.com/shanberg/project-manager"
 
@@ -15,7 +15,7 @@ cask "pm" do
   depends_on macos: :tahoe
 
   # The CLI (`pm`) is the companion; not a hard requirement, but they share config.
-  app "PM.app"
+  app "Folio.app"
 
   uninstall quit: "com.stuarthanberg.pm"
 
