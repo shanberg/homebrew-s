@@ -1,8 +1,8 @@
 # frozen_string_literal: true
 
 cask "pm" do
-  version "0.53.1"
-  sha256 "32b85c88f05ccf558845bc4dd85b6abc6ff23a3d1a48dd11b5d83540ff2ccf3a"
+  version "0.53.2"
+  sha256 "fc9fd7480f523a873c316cde1e95e67b1533dc13d1605c879aadd32b6111a4d8"
 
   url "https://github.com/shanberg/project-manager/releases/download/v#{version}/Folio-v#{version}.zip"
   name "Folio"
