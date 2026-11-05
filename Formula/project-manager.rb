@@ -5,9 +5,9 @@
 class ProjectManager < Formula
   desc "CLI for PARA-style project creation with domain-based numbering"
   homepage "https://github.com/shanberg/project-manager"
-  url "https://github.com/shanberg/project-manager/releases/download/v0.63.0/project-manager-0.63.0.tar.gz"
-  sha256 "bb100d302af66878afe0e5cc53dbc446867adb22901a9ee157b47778bcd6adc9"
-  version "0.63.0"
+  url "https://github.com/shanberg/project-manager/releases/download/v0.63.1/project-manager-0.63.1.tar.gz"
+  sha256 "7750648be0117d6ff8ac4cf72608eb038a940a9134fdb3e06e2c30c49fdaff6f"
+  version "0.63.1"
   head "https://github.com/shanberg/project-manager.git", branch: "main"
 
   def install
